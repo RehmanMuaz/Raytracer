@@ -1,0 +1,12 @@
+.controls {
+  margin-top: 10px;
+}
+
+.controls label {
+  display: block;
+  margin: 5px 0;
+}
+
+.controls input[type="range"] {
+  width: 200px;
+}
