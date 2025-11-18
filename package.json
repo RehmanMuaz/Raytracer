@@ -1,7 +1,7 @@
 {
   "name": "raytracer",
   "version": "0.1.0",
-  "homepage": "https://github.com/RehmanMuaz/Raytracer",
+  "homepage": "https://rehmanmuaz.github.io/Raytracer",
   "private": true,
   "dependencies": {
     "cra-template": "1.2.0",
@@ -19,7 +19,7 @@
     "build": "react-app-rewired build",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
-    "predeploy": "react-app-rewired build",
+    "predeploy": "npm run build",
     "deploy": "gh-pages -d build"
   },
   "eslintConfig": {

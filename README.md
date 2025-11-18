@@ -1,4 +1,16 @@
-# Getting Started with Create React App
+# Demo
+
+<a href="(https://rehmanmuaz.github.io/Raytracer/)" target="_blank">
+  <img 
+    src="https://img.shields.io/badge/VIEW%20LIVE%20SITE-ff7f50?style=for-the-badge" 
+    style="transform: scale(2); transform-origin: left;" 
+  />
+</a>
+<br>
+<br>
+<br>
+
+# Project Setup
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
