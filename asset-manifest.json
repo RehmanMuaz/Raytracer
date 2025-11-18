@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/RehmanMuaz/Raytracer/static/css/main.1bead921.css",
+    "main.js": "/RehmanMuaz/Raytracer/static/js/main.4157035c.js",
+    "static/js/415.cf07de4e.chunk.js": "/RehmanMuaz/Raytracer/static/js/415.cf07de4e.chunk.js",
+    "index.html": "/RehmanMuaz/Raytracer/index.html",
+    "main.1bead921.css.map": "/RehmanMuaz/Raytracer/static/css/main.1bead921.css.map",
+    "main.4157035c.js.map": "/RehmanMuaz/Raytracer/static/js/main.4157035c.js.map",
+    "415.cf07de4e.chunk.js.map": "/RehmanMuaz/Raytracer/static/js/415.cf07de4e.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.1bead921.css",
+    "static/js/main.4157035c.js"
+  ]
+}
