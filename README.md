@@ -1,6 +1,6 @@
 # Demo
 
-<a href="(https://rehmanmuaz.github.io/Raytracer/)" target="_blank">
+<a href="https://rehmanmuaz.github.io/Raytracer/" target="_blank">
   <img 
     src="https://img.shields.io/badge/VIEW%20LIVE%20SITE-ff7f50?style=for-the-badge" 
     style="transform: scale(2); transform-origin: left;" 
