@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/Raytracer/static/css/main.1bead921.css",
-    "main.js": "/Raytracer/static/js/main.625c056f.js",
+    "main.js": "/Raytracer/static/js/main.25894f7a.js",
     "static/js/415.cf07de4e.chunk.js": "/Raytracer/static/js/415.cf07de4e.chunk.js",
     "index.html": "/Raytracer/index.html",
     "main.1bead921.css.map": "/Raytracer/static/css/main.1bead921.css.map",
-    "main.625c056f.js.map": "/Raytracer/static/js/main.625c056f.js.map",
+    "main.25894f7a.js.map": "/Raytracer/static/js/main.25894f7a.js.map",
     "415.cf07de4e.chunk.js.map": "/Raytracer/static/js/415.cf07de4e.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.1bead921.css",
-    "static/js/main.625c056f.js"
+    "static/js/main.25894f7a.js"
   ]
 }
