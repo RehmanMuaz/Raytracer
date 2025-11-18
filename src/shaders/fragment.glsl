@@ -11,6 +11,9 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform vec3 uCameraPos;
 uniform vec3 uCameraTarget;
+uniform vec3 uSkyTopColor;
+uniform vec3 uSkyBottomColor;
+uniform float uSkyIntensity;
 
 uniform int uShapeCount;
 uniform vec4 uShapePosType[MAX_SHAPES];
@@ -37,6 +40,7 @@ struct Material {
     float metallic;
     float roughness;
     float ao;
+    float shaderType;
 };
 
 float hash11(float p) {
@@ -72,24 +76,6 @@ float sdCylinder(vec3 p, vec2 h) {
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
 }
 
-float sdPyramid(vec3 p, vec2 h) {
-    vec3 q = vec3(p.x / h.x, p.y / h.y, p.z / h.x);
-    q.xz = abs(q.xz);
-    if (q.z > q.x) {
-        float tmp = q.x;
-        q.x = q.z;
-        q.z = tmp;
-    }
-    q.x -= 1.0;
-    vec3 r = vec3(q.z, q.y - 0.5 * q.x, q.y + 0.5 * q.x);
-    float s = max(r.x, max(r.y, -r.z));
-    float t = max(r.y, -r.z);
-    float outside = length(max(vec3(r.x, r.y, -r.z), 0.0));
-    float inside = min(0.0, max(s, t));
-    float dist = inside < 0.0 ? inside : outside / 1.224745;
-    return dist * min(h.x, h.y);
-}
-
 float mapScene(vec3 p, out int shapeIndex) {
     float minDist = FAR_PLANE;
     shapeIndex = -1;
@@ -113,10 +99,8 @@ float mapScene(vec3 p, out int shapeIndex) {
             d = sdPlane(local);
         } else if (typeId < 3.5) {
             d = sdTorus(local, scale.xy);
-        } else if (typeId < 4.5) {
-            d = sdCylinder(local, scale.xy);
         } else {
-            d = sdPyramid(local, scale.xy);
+            d = sdCylinder(local, scale.xy);
         }
 
         if (d < minDist) {
@@ -151,6 +135,35 @@ Hit traceScene(vec3 ro, vec3 rd) {
     return hit;
 }
 
+Hit traceSceneSkip(vec3 ro, vec3 rd, int skipIndex) {
+    float travel = 0.0;
+    Hit hit;
+    hit.index = -1;
+    hit.dist = FAR_PLANE;
+
+    for (int i = 0; i < 160; i++) {
+        vec3 pos = ro + rd * travel;
+        int idx;
+        float d = mapScene(pos, idx);
+
+        if (idx == skipIndex && d < EPSILON) {
+            d = EPSILON;
+        } else if (d < EPSILON) {
+            hit.dist = travel;
+            hit.index = idx;
+            return hit;
+        }
+
+        travel += d;
+        if (travel > FAR_PLANE) {
+            break;
+        }
+    }
+
+    hit.dist = travel;
+    return hit;
+}
+
 vec3 estimateNormal(vec3 p) {
     int idx;
     vec2 e = vec2(0.001, 0.0);
@@ -166,6 +179,7 @@ Material getMaterial(int idx) {
     m.metallic = clamp(uShapeColorMetal[idx].w, 0.0, 1.0);
     m.roughness = clamp(uShapeRoughAO[idx].x, 0.05, 1.0);
     m.ao = clamp(uShapeRoughAO[idx].y, 0.0, 1.0);
+    m.shaderType = uShapeRoughAO[idx].z;
     return m;
 }
 
@@ -236,10 +250,11 @@ vec3 hemisphereSample(vec3 normal, vec2 rnd) {
 }
 
 vec3 environmentColor(vec3 dir) {
-    float t = 0.5 * (dir.y + 1.0);
-    vec3 sky = mix(vec3(0.08, 0.09, 0.12), vec3(0.5, 0.7, 0.9), t);
-    vec3 ground = vec3(0.03, 0.025, 0.02);
-    return mix(ground, sky, step(0.0, dir.y));
+    float t = clamp(0.5 * (dir.y + 1.0), 0.0, 1.0);
+    vec3 sky = mix(uSkyBottomColor, uSkyTopColor, t);
+    vec3 ground = uSkyBottomColor;
+    vec3 blend = mix(ground, sky, smoothstep(-0.05, 0.2, dir.y));
+    return blend * uSkyIntensity;
 }
 
 vec3 evaluateBRDF(vec3 N, vec3 V, vec3 L, Material mat, vec3 radiance) {
@@ -323,6 +338,39 @@ vec3 sampleReflection(vec3 pos, vec3 normal, vec3 incident, Material mat) {
     return bounceMat.albedo * fres * (1.0 - bounceMat.roughness * 0.5);
 }
 
+vec3 sampleTransmission(vec3 pos, vec3 normal, vec3 incident, vec3 tint, int currentIndex) {
+    float etai = 1.0;
+    float etat = 1.45;
+    vec3 n = normal;
+    float cosi = clamp(dot(-incident, n), -1.0, 1.0);
+    if (cosi < 0.0) {
+        cosi = -cosi;
+        float temp = etai;
+        etai = etat;
+        etat = temp;
+        n = -n;
+    }
+    float eta = etai / etat;
+    float k = 1.0 - eta * eta * (1.0 - cosi * cosi);
+    vec3 dir;
+    if (k < 0.0) {
+        dir = normalize(reflect(incident, n));
+    } else {
+        dir = normalize(eta * incident + (eta * cosi - sqrt(max(k, 0.0))) * n);
+    }
+    vec3 origin = pos + dir * EPSILON * 4.0;
+    Hit hit = traceSceneSkip(origin, dir, currentIndex);
+    if (hit.index == -1) {
+        return environmentColor(dir);
+    }
+    vec3 hitPos = origin + dir * hit.dist;
+    Material bounceMat = getMaterial(hit.index);
+    vec3 hitNormal = estimateNormal(hitPos);
+    float weight = max(dot(hitNormal, -dir), 0.0);
+    vec3 glassTint = mix(vec3(1.0), tint, 0.6);
+    return bounceMat.albedo * weight * bounceMat.ao * glassTint;
+}
+
 vec3 shade(vec3 ro, vec3 rd, vec2 pixel) {
     Hit hit = traceScene(ro, rd);
     if (hit.index == -1) {
@@ -336,14 +384,21 @@ vec3 shade(vec3 ro, vec3 rd, vec2 pixel) {
 
     float ao = calcAO(pos, normal) * mat.ao;
     vec2 randA = hash21(pixel + uTime);
-    vec2 randB = hash21(pixel + uTime * 1.37 + 17.0);
 
+    int shaderType = int(floor(mat.shaderType + 0.5));
     vec3 direct = computeAreaLights(pos, normal, viewDir, mat, pixel);
     vec3 indirect = sampleIndirect(pos, normal, mat, randA);
     vec3 reflection = sampleReflection(pos, normal, rd, mat);
 
-    vec3 color = direct * ao + indirect * 0.35 + reflection * (mat.metallic + (1.0 - mat.roughness) * 0.25);
-    return color;
+    if (shaderType == 1) {
+        vec3 transmission = sampleTransmission(pos, normal, rd, mat.albedo, hit.index);
+        vec3 fresnel = fresnelSchlick(max(dot(normal, viewDir), 0.0), vec3(0.04));
+        return reflection * fresnel + transmission * (vec3(1.0) - fresnel);
+    }
+
+    vec3 surfaceDiffuse = direct * ao + indirect * 0.35;
+    vec3 surfaceSpec = reflection * (mat.metallic + (1.0 - mat.roughness) * 0.25);
+    return surfaceDiffuse + surfaceSpec;
 }
 
 void main() {

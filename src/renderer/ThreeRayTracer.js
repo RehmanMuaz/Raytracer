@@ -14,31 +14,46 @@ const shapeTypeToId = {
   plane: 2,
   torus: 3,
   cylinder: 4,
-  pyramid: 5,
+};
+
+const shapeShaderToId = {
+  pbr: 0,
+  glass: 1,
+};
+
+const rotationFromNormal = (normal) => {
+  const normalized = normal.clone().normalize();
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    normalized
+  );
+  return new THREE.Euler().setFromQuaternion(quaternion);
 };
 
 const createDefaultShapes = () => [
   {
     name: "Metal Sphere",
     type: "sphere",
-    position: new THREE.Vector3(-1.4, -0.2, -3.2),
+    position: new THREE.Vector3(-1.93, -0.59, -3.2),
     scale: new THREE.Vector3(0.65, 0.65, 0.65),
     rotation: new THREE.Euler(0, 0, 0),
     color: new THREE.Color("#ff714a"),
     roughness: 0.25,
     metallic: 0.9,
     ao: 1.0,
+    shader: "pbr",
   },
   {
     name: "Ceramic Box",
     type: "box",
     position: new THREE.Vector3(1.2, -0.8, -2.4),
     scale: new THREE.Vector3(0.7, 0.4, 0.7),
-    rotation: new THREE.Euler(0.3, 0.7, 0.0),
+    rotation: new THREE.Euler(0.0, 0.7, 0.0),
     color: new THREE.Color("#7a8bff"),
     roughness: 0.65,
     metallic: 0.05,
     ao: 0.9,
+    shader: "pbr",
   },
   {
     name: "Copper Torus",
@@ -50,39 +65,67 @@ const createDefaultShapes = () => [
     roughness: 0.35,
     metallic: 0.8,
     ao: 0.95,
+    shader: "pbr",
   },
   {
     name: "Glass Cylinder",
     type: "cylinder",
     position: new THREE.Vector3(-0.3, -0.9, -1.7),
-    scale: new THREE.Vector3(0.45, 0.9, 0.0),
+    scale: new THREE.Vector3(0.8, 0.3, 0.0),
     rotation: new THREE.Euler(0, 0, 0),
     color: new THREE.Color("#f0f7ff"),
     roughness: 0.15,
-    metallic: 0.1,
-    ao: 0.85,
-  },
-  {
-    name: "Stone Pyramid",
-    type: "pyramid",
-    position: new THREE.Vector3(2.2, -0.9, -3.5),
-    scale: new THREE.Vector3(0.9, 1.0, 0.0),
-    rotation: new THREE.Euler(0, 0.2, 0.1),
-    color: new THREE.Color("#c1b29a"),
-    roughness: 0.8,
     metallic: 0.05,
-    ao: 1.0,
+    ao: 0.85,
+    shader: "glass",
   },
   {
     name: "Matte Plane",
     type: "plane",
     position: new THREE.Vector3(0, -1.2, 0),
     scale: new THREE.Vector3(1, 1, 1),
-    rotation: new THREE.Euler(0, 0, 0),
+    rotation: rotationFromNormal(new THREE.Vector3(0, 1, 0)),
     color: new THREE.Color("#d6d2c9"),
     roughness: 0.9,
     metallic: 0.0,
     ao: 1.0,
+    shader: "pbr",
+  },
+  {
+    name: "Left Wall",
+    type: "plane",
+    position: new THREE.Vector3(-3.5, 0, 0),
+    scale: new THREE.Vector3(1, 1, 1),
+    rotation: rotationFromNormal(new THREE.Vector3(1, 0, 0)),
+    color: new THREE.Color("#ff0000"),
+    roughness: 0.8,
+    metallic: 0.0,
+    ao: 1.0,
+    shader: "pbr",
+  },
+  {
+    name: "Right Wall",
+    type: "plane",
+    position: new THREE.Vector3(3.5, 0, 0),
+    scale: new THREE.Vector3(1, 1, 1),
+    rotation: rotationFromNormal(new THREE.Vector3(-1, 0, 0)),
+    color: new THREE.Color("#002aff"),
+    roughness: 0.85,
+    metallic: 0.0,
+    ao: 1.0,
+    shader: "pbr",
+  },
+  {
+    name: "Back Wall",
+    type: "plane",
+    position: new THREE.Vector3(0, 0, -5.5),
+    scale: new THREE.Vector3(1, 1, 1),
+    rotation: rotationFromNormal(new THREE.Vector3(0, 0, 1)),
+    color: new THREE.Color("#00ff11"),
+    roughness: 0.9,
+    metallic: 0.0,
+    ao: 1.0,
+    shader: "pbr",
   },
 ];
 
@@ -93,17 +136,23 @@ const createDefaultAreaLights = () => [
     normal: new THREE.Vector3(0.3942, -0.9757, -0.168).normalize(),
     size: new THREE.Vector2(3, 3),
     color: new THREE.Color("#fff2d8"),
-    intensity: 50.0,
+    intensity: 74.5,
   },
   {
     name: "Fill Panel",
-    position: new THREE.Vector3(2.56, 2.13, -2.2),
-    normal: new THREE.Vector3(-1.0, -0.2, 0.1).normalize(),
+    position: new THREE.Vector3(2.91, 0.39, -2.14),
+    normal: new THREE.Vector3(-0.9966, -0.47076, -0.37432).normalize(),
     size: new THREE.Vector2(0.1, 1.36),
-    color: new THREE.Color("#a3c9ff"),
-    intensity: 50.0,
+    color: new THREE.Color("#ffc8a3"),
+    intensity: 64.1,
   },
 ];
+
+const createEnvironmentSettings = () => ({
+  skyTop: new THREE.Color("#6d8cff"),
+  skyBottom: new THREE.Color("#05060a"),
+  intensity: 1.0,
+});
 
 const resolveShaderSource = async (shader) => {
   if (!shader) {
@@ -156,6 +205,7 @@ const updateShapeUniforms = (uniforms, shapes) => {
 
   shapes.slice(0, MAX_SHAPES).forEach((shape, idx) => {
     const typeId = shapeTypeToId[shape.type] ?? 0;
+    const shaderId = shapeShaderToId[shape.shader] ?? 0;
     posType[idx].set(
       shape.position.x,
       shape.position.y,
@@ -169,7 +219,7 @@ const updateShapeUniforms = (uniforms, shapes) => {
       shape.color.b,
       shape.metallic
     );
-    roughAO[idx].set(shape.roughness, shape.ao, 0, 0);
+    roughAO[idx].set(shape.roughness, shape.ao, shaderId, 0);
     tempMatrix.makeRotationFromEuler(shape.rotation);
     rotations[idx].setFromMatrix4(tempMatrix).transpose();
   });
@@ -233,13 +283,19 @@ const buildGui = (
   shapes,
   areaLights,
   camera,
+  environment,
   updateShapes,
   updateLights,
-  updateCamera
+  updateCamera,
+  updateEnvironment
 ) => {
   const gui = new GUI({ title: "Raytracer Controls", width: 320 });
   shapes.forEach((shape, idx) => {
     const folder = gui.addFolder(`Shape ${idx + 1}: ${shape.name}`);
+    folder
+      .add(shape, "shader", Object.keys(shapeShaderToId))
+      .name("Shader")
+      .onChange(updateShapes);
     folder
       .add(shape, "type", Object.keys(shapeTypeToId))
       .name("Primitive")
@@ -347,6 +403,30 @@ const buildGui = (
     updateCamera
   );
 
+  const environmentFolder = gui.addFolder("Environment");
+  const envColors = {
+    skyTop: `#${environment.skyTop.getHexString()}`,
+    skyBottom: `#${environment.skyBottom.getHexString()}`,
+  };
+  environmentFolder
+    .addColor(envColors, "skyTop")
+    .name("Sky Top")
+    .onChange((value) => {
+      environment.skyTop.set(value);
+      updateEnvironment();
+    });
+  environmentFolder
+    .addColor(envColors, "skyBottom")
+    .name("Sky Bottom")
+    .onChange((value) => {
+      environment.skyBottom.set(value);
+      updateEnvironment();
+    });
+  environmentFolder
+    .add(environment, "intensity", 0.1, 3, 0.01)
+    .name("Sky Intensity")
+    .onChange(updateEnvironment);
+
   return gui;
 };
 
@@ -361,6 +441,7 @@ const ShaderScene = () => {
 
     const shapes = createDefaultShapes();
     const lights = createDefaultAreaLights();
+    const environment = createEnvironmentSettings();
     let renderer = null;
     let animationId = null;
     let handleResize = null;
@@ -411,6 +492,9 @@ const ShaderScene = () => {
           uAreaLightNormal: { value: initializeVector4Array(MAX_AREA_LIGHTS) },
           uAreaLightSize: { value: initializeVector4Array(MAX_AREA_LIGHTS) },
           uAreaLightColor: { value: initializeVector4Array(MAX_AREA_LIGHTS) },
+          uSkyTopColor: { value: environment.skyTop.clone() },
+          uSkyBottomColor: { value: environment.skyBottom.clone() },
+          uSkyIntensity: { value: environment.intensity },
         };
 
         const cameraControls = {
@@ -457,13 +541,21 @@ const ShaderScene = () => {
           uniforms.uCameraPos.value = cameraControls.position;
           uniforms.uCameraTarget.value = cameraControls.target;
         };
+        const triggerEnvironmentUpdate = () => {
+          uniforms.uSkyTopColor.value.copy(environment.skyTop);
+          uniforms.uSkyBottomColor.value.copy(environment.skyBottom);
+          uniforms.uSkyIntensity.value = environment.intensity;
+        };
+        triggerEnvironmentUpdate();
         gui = buildGui(
           shapes,
           lights,
           cameraControls,
+          environment,
           triggerShapeUpdate,
           triggerLightUpdate,
-          triggerCameraUpdate
+          triggerCameraUpdate,
+          triggerEnvironmentUpdate
         );
       })
       .catch((error) => {
