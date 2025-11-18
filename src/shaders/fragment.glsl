@@ -412,6 +412,5 @@ void main() {
     vec3 rd = normalize(forward * focal + right * uv.x + up * uv.y);
 
     vec3 color = shade(uCameraPos, rd, gl_FragCoord.xy);
-    color = pow(color, vec3(0.4545));
     gl_FragColor = vec4(color, 1.0);
 }

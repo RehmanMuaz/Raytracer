@@ -151,7 +151,7 @@ const createDefaultAreaLights = () => [
 const createEnvironmentSettings = () => ({
   skyTop: new THREE.Color("#6d8cff"),
   skyBottom: new THREE.Color("#05060a"),
-  intensity: 1.0,
+  intensity: 1.3,
 });
 
 const resolveShaderSource = async (shader) => {
@@ -467,6 +467,10 @@ const ShaderScene = () => {
         camera.position.z = 1;
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.25;
+        renderer.physicallyCorrectLights = true;
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x000000, 1);
