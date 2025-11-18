@@ -15,6 +15,9 @@ uniform vec3 u_cameraPos;
 // Constants
 const float PI = 3.141592653589793;
 const float EPSILON = 0.0001;
+const int MAX_DEPTH = 5; // Maximum recursion depth
+#define NUM_SAMPLES 16 // Number of samples for the area light
+#define NUM_GI_SAMPLES 16 // Number of samples for global illumination
 
 // Material properties
 struct Material {
@@ -32,13 +35,12 @@ struct Object {
 };
 
 // Scene assets
-#define NUM_OBJECTS 8 // Define the number of objects
+#define NUM_OBJECTS 7 // Define the number of objects
 #define OBJECT_TYPE_SPHERE 0
 #define OBJECT_TYPE_BOX 1
 #define OBJECT_TYPE_PLANE 2
 Object objects[NUM_OBJECTS];
 
-#define NUM_SAMPLES 16 // Number of samples for the area light
 
 // Area light properties
 struct AreaLight {
@@ -65,6 +67,11 @@ vec3 sampleAreaLight(vec2 uv) {
            areaLight.up * (uv.y * areaLight.height);
 }
 
+// Compute reflection direction
+vec3 reflectRay(vec3 V, vec3 N) {
+    return reflect(-V, N);
+}
+
 // Ray-sphere intersection
 float raySphereIntersect(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float sphereRadius) {
     vec3 oc = rayOrigin - sphereCenter;
@@ -72,10 +79,13 @@ float raySphereIntersect(vec3 rayOrigin, vec3 rayDir, vec3 sphereCenter, float s
     float b = 2.0 * dot(oc, rayDir);
     float c = dot(oc, oc) - sphereRadius * sphereRadius;
     float discriminant = b * b - 4.0 * a * c;
+
     if (discriminant < 0.0) {
-        return -1.0;
+        return -1.0; // No intersection
     }
-    return (-b - sqrt(discriminant)) / (2.0 * a);
+
+    float t = (-b - sqrt(discriminant)) / (2.0 * a);
+    return t; // Return the closest intersection
 }
 
 // Ray-box intersection
@@ -87,8 +97,12 @@ float rayBoxIntersect(vec3 rayOrigin, vec3 rayDir, vec3 boxMin, vec3 boxMax) {
     vec3 tmax = max(t0, t1);
     float tNear = max(max(tmin.x, tmin.y), tmin.z);
     float tFar = min(min(tmax.x, tmax.y), tmax.z);
-    if (tNear > tFar || tFar < 0.0) return -1.0;
-    return tNear;
+
+    if (tNear > tFar || tFar < 0.0) {
+        return -1.0; // No intersection
+    }
+
+    return tNear; // Return the closest intersection
 }
 
 // Ray-plane intersection
@@ -96,9 +110,11 @@ float rayPlaneIntersect(vec3 rayOrigin, vec3 rayDir, vec3 planeNormal, float pla
     float denom = dot(planeNormal, rayDir);
     if (abs(denom) > EPSILON) {
         float t = -(dot(rayOrigin, planeNormal) + planeDist) / denom;
-        if (t >= 0.0) return t;
+        if (t >= 0.0) {
+            return t; // Return the intersection
+        }
     }
-    return -1.0;
+    return -1.0; // No intersection
 }
 
 // Fresnel Schlick approximation
@@ -131,6 +147,32 @@ float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
     float ggx1 = geometrySchlickGGX(NdotV, roughness);
     float ggx2 = geometrySchlickGGX(NdotL, roughness);
     return ggx1 * ggx2;
+}
+
+bool isInShadow(vec3 hitPoint, vec3 lightSample, vec3 normal) {
+    vec3 shadowRayDir = normalize(lightSample - hitPoint);
+    vec3 shadowRayOrigin = hitPoint + normal * EPSILON; // Offset to avoid self-intersection
+
+    // Check for intersections with objects
+    for (int i = 0; i < NUM_OBJECTS; i++) {
+        float t = -1.0;
+        if (objects[i].type == OBJECT_TYPE_SPHERE) {
+            t = raySphereIntersect(shadowRayOrigin, shadowRayDir, objects[i].position, objects[i].dimensions.x);
+        } else if (objects[i].type == OBJECT_TYPE_BOX) {
+            vec3 boxMin = objects[i].position - objects[i].dimensions;
+            vec3 boxMax = objects[i].position + objects[i].dimensions;
+            t = rayBoxIntersect(shadowRayOrigin, shadowRayDir, boxMin, boxMax);
+        } else if (objects[i].type == OBJECT_TYPE_PLANE) {
+            t = rayPlaneIntersect(shadowRayOrigin, shadowRayDir, objects[i].dimensions, dot(objects[i].dimensions, objects[i].position));
+        }
+
+        // If there's an intersection, the point is in shadow
+        if (t > 0.0 && t < length(lightSample - hitPoint)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // PBR Shading
@@ -168,19 +210,103 @@ vec3 pbrShadingAreaLight(Material material, vec3 N, vec3 V, vec3 hitPoint) {
         // Sample a point on the area light
         vec3 lightSample = sampleAreaLight(uv);
 
-        // Compute the light direction and distance
-        vec3 L = normalize(lightSample - hitPoint);
-        float distance = length(lightSample - hitPoint);
-        float attenuation = 1.0 / (distance * distance); // Inverse square falloff
+        // Check if the point is in shadow
+        if (!isInShadow(hitPoint, lightSample, N)) {
+            // Compute the light direction and distance
+            vec3 L = normalize(lightSample - hitPoint);
+            float distance = length(lightSample - hitPoint);
+            float attenuation = 1.0 / (distance * distance); // Inverse square falloff
 
-        // Compute the light contribution
-        lightColor += pbrShading(material, N, V, L) * areaLight.color * attenuation;
+            // Compute the light contribution
+            lightColor += pbrShading(material, N, V, L) * areaLight.color * attenuation;
+        }
     }
 
     // Average the light contributions
     return lightColor / float(NUM_SAMPLES);
 }
 
+// Generate a random direction using cosine-weighted sampling
+vec3 randomDirection(vec2 randUV) {
+    float theta = 2.0 * PI * randUV.x;
+    float phi = acos(sqrt(randUV.y));
+    return vec3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi));
+}
+
+vec3 getSceneColor(vec3 rayOrigin, vec3 rayDir) {
+    vec3 color = vec3(0.0);
+    vec3 throughput = vec3(1.0); // Accumulates the contribution of each bounce
+
+    for (int depth = 0; depth < MAX_DEPTH; depth++) {
+        float tMin = 1000.0;
+        vec3 normal = vec3(0.0);
+        Material material = Material(vec3(0.0), 0.0, 0.0);
+        vec3 hitPoint = vec3(0.0);
+        int closestObjectType = -1; // Store the type of the closest object
+
+        // Intersect with all objects
+        for (int i = 0; i < NUM_OBJECTS; i++) {
+            float t = -1.0;
+            if (objects[i].type == OBJECT_TYPE_SPHERE) {
+                t = raySphereIntersect(rayOrigin, rayDir, objects[i].position, objects[i].dimensions.x);
+            } else if (objects[i].type == OBJECT_TYPE_BOX) {
+                vec3 boxMin = objects[i].position - objects[i].dimensions;
+                vec3 boxMax = objects[i].position + objects[i].dimensions;
+                t = rayBoxIntersect(rayOrigin, rayDir, boxMin, boxMax);
+            } else if (objects[i].type == OBJECT_TYPE_PLANE) {
+                t = rayPlaneIntersect(rayOrigin, rayDir, objects[i].dimensions, dot(objects[i].dimensions, objects[i].position));
+            }
+
+            // Check if this intersection is closer than the previous closest
+            if (t > 0.0 && t < tMin) {
+                tMin = t;
+                hitPoint = rayOrigin + t * rayDir;
+                closestObjectType = objects[i].type; // Store the type of the closest object
+
+                // Calculate the normal and material for the closest object
+                if (objects[i].type == OBJECT_TYPE_SPHERE) {
+                    normal = normalize(hitPoint - objects[i].position);
+                } else if (objects[i].type == OBJECT_TYPE_BOX) {
+                    vec3 localHit = hitPoint - objects[i].position;
+                    vec3 absLocalHit = abs(localHit);
+                    if (absLocalHit.x > absLocalHit.y && absLocalHit.x > absLocalHit.z) {
+                        normal = vec3(sign(localHit.x), 0.0, 0.0);
+                    } else if (absLocalHit.y > absLocalHit.z) {
+                        normal = vec3(0.0, sign(localHit.y), 0.0);
+                    } else {
+                        normal = vec3(0.0, 0.0, sign(localHit.z));
+                    }
+                } else if (objects[i].type == OBJECT_TYPE_PLANE) {
+                    normal = objects[i].dimensions;
+                }
+                material = objects[i].material;
+            }
+        }
+
+        // If no intersection, break the loop
+        if (tMin >= 1000.0) {
+            break;
+        }
+
+        // Lighting with area light
+        vec3 V = normalize(u_cameraPos - hitPoint);
+        vec3 directColor = pbrShadingAreaLight(material, normal, V, hitPoint);
+        color += throughput * directColor;
+
+        // Add reflections (if material is metallic)
+        if (material.metallic > 0.0) {
+            vec3 reflectionDir = reflectRay(V, normal);
+            rayOrigin = hitPoint + normal * EPSILON; // Offset to avoid self-intersection
+            rayDir = reflectionDir;
+            throughput *= material.metallic; // Scale by material reflectivity
+        } else {
+            break; // No further bounces for non-metallic surfaces
+        }
+    }
+
+    return color;
+}
+    
 // Initialize scene
 void initScene() {
     // Area light
@@ -197,69 +323,12 @@ void initScene() {
     objects[1] = Object(OBJECT_TYPE_PLANE, vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 0.0), Material(vec3(0.8, 0.8, 0.8), 0.0, 0.8));  // Ceiling
     objects[2] = Object(OBJECT_TYPE_PLANE, vec3(1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0), Material(vec3(0.8, 0.8, 0.8), 0.0, 0.8));  // Right wall
     objects[3] = Object(OBJECT_TYPE_PLANE, vec3(-1.0, 0.0, 0.0), vec3(-1.0, 0.0, 0.0), Material(vec3(0.8, 0.8, 0.8), 0.0, 0.8)); // Left wall
-    objects[4] = Object(OBJECT_TYPE_PLANE, vec3(0.0, 0.0, 1.0), vec3(0.0, 0.0, 1.0), Material(vec3(0.8, 0.8, 0.8), 0.0, 0.8));  // Front wall
-    objects[5] = Object(OBJECT_TYPE_PLANE, vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, -1.0), Material(vec3(0.8, 0.8, 0.8), 0.0, 0.8)); // Back wall
+    objects[4] = Object(OBJECT_TYPE_PLANE, vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, -1.0), Material(vec3(0.8, 0.8, 0.8), 0.0, 0.8)); // Back wall
 
     // Sphere
-    objects[6] = Object(OBJECT_TYPE_SPHERE, vec3(-0.5, -0.5, 1.5), vec3(0.5, 0.0, 0.0), Material(vec3(0.8, 0.2, 0.2), 0.5, 0.3));
-    objects[7] = Object(OBJECT_TYPE_SPHERE, vec3(0.5, -0.5, 1.2), vec3(0.5, 0.0, 0.0), Material(vec3(0.2, 0.8, 0.2), 0.0, 0.8));
-}
-
-// Scene rendering
-vec3 getSceneColor(vec3 rayOrigin, vec3 rayDir) {
-    float tMin = 1000.0;
-    vec3 normal = vec3(0.0);
-    Material material = Material(vec3(0.0), 0.0, 0.0);
-    vec3 hitPoint = vec3(0.0);
-
-    // Intersect with all objects
-    for (int i = 0; i < NUM_OBJECTS; i++) {
-        float t = -1.0;
-        if (objects[i].type == OBJECT_TYPE_SPHERE) {
-            // Sphere intersection
-            t = raySphereIntersect(rayOrigin, rayDir, objects[i].position, objects[i].dimensions.x);
-        } else if (objects[i].type == OBJECT_TYPE_BOX) {
-            // Box intersection
-            vec3 boxMin = objects[i].position - objects[i].dimensions;
-            vec3 boxMax = objects[i].position + objects[i].dimensions;
-            t = rayBoxIntersect(rayOrigin, rayDir, boxMin, boxMax);
-        } else if (objects[i].type == OBJECT_TYPE_PLANE) {
-            // Plane intersection
-            t = rayPlaneIntersect(rayOrigin, rayDir, objects[i].dimensions, dot(objects[i].dimensions, objects[i].position));
-        }
-
-        if (t > 0.0 && t < tMin) {
-            tMin = t;
-            hitPoint = rayOrigin + t * rayDir;
-            if (objects[i].type == OBJECT_TYPE_SPHERE) {
-                // Sphere normal
-                normal = normalize(hitPoint - objects[i].position);
-            } else if (objects[i].type == OBJECT_TYPE_BOX) {
-                // Box normal
-                vec3 localHit = hitPoint - objects[i].position;
-                vec3 absLocalHit = abs(localHit);
-                if (absLocalHit.x > absLocalHit.y && absLocalHit.x > absLocalHit.z) {
-                    normal = vec3(sign(localHit.x), 0.0, 0.0);
-                } else if (absLocalHit.y > absLocalHit.z) {
-                    normal = vec3(0.0, sign(localHit.y), 0.0);
-                } else {
-                    normal = vec3(0.0, 0.0, sign(localHit.z));
-                }
-            } else if (objects[i].type == OBJECT_TYPE_PLANE) {
-                // Plane normal
-                normal = objects[i].dimensions;
-            }
-            material = objects[i].material;
-        }
-    }
-
-    // Lighting with area light
-    if (tMin < 1000.0) {
-        vec3 V = normalize(u_cameraPos - hitPoint);
-        return pbrShadingAreaLight(material, normal, V, hitPoint);
-    }
-
-    return vec3(0.0); // Background color
+    objects[5] = Object(OBJECT_TYPE_SPHERE, vec3(-0.5, -0.5, 1.5), vec3(0.5, 0.0, 0.0), Material(vec3(0.2, 0.2, 0.2), 1.0, 0.1));
+    objects[6] = Object(OBJECT_TYPE_SPHERE, vec3(0.5, -0.5, 1.2), vec3(0.5, 0.0, 0.0), Material(vec3(0.2, 0.8, 0.2), 0.0, 0.2));
+    // metallic / roughness
 }
 
 void main() {
@@ -271,11 +340,15 @@ void main() {
     uv.x *= u_resolution.x / u_resolution.y;
 
     // Position the camera outside the room
-    vec3 rayOrigin = vec3(0.0, 0.0, 3.0); // Camera position
+    vec3 rayOrigin = vec3(0.0, 0.0, 3.5); // Camera position
     vec3 rayDir = normalize(vec3(uv, -1.0));
 
-    // Render scene
+    // Render scene with reflections and global illumination
     vec3 color = getSceneColor(rayOrigin, rayDir);
+
+    // Apply exposure control
+    float exposure = 1.0; // Adjust as needed
+    color = vec3(1.0) - exp(-color * exposure);
 
     gl_FragColor = vec4(color, 1.0);
 }

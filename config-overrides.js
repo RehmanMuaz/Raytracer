@@ -1,12 +1,18 @@
-module.exports = function override(config, env) {
-  console.log("config-overrides.js is being executed");
-  console.log("Webpack Configuration:", config.module.rules);
+module.exports = function override(config) {
+  const shaderRule = {
+    test: /\.(glsl|vs|fs|vert|frag)$/i,
+    exclude: /node_modules/,
+    type: "asset/source",
+  };
 
-  // Add a rule to handle .glsl files
-  config.module.rules.push({
-    test: /\.glsl$/,
-    use: "raw-loader",
-  });
+  const rules = config.module.rules;
+  const oneOfRule = rules.find((rule) => Array.isArray(rule.oneOf));
+
+  if (oneOfRule) {
+    oneOfRule.oneOf.unshift(shaderRule);
+  } else {
+    rules.push(shaderRule);
+  }
 
   return config;
 };
