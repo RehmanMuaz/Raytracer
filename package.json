@@ -1,7 +1,7 @@
 {
   "name": "raytracer",
   "version": "0.1.0",
-  "homepage": "https://rehmanmuaz.github.io/Raytracer",
+  "homepage": "https://rehmanmuaz.github.io/Raytracer/",
   "private": true,
   "dependencies": {
     "cra-template": "1.2.0",

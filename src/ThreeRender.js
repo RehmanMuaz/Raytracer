@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import ShaderScene from "./renderer/ThreeRayTracer";
 
 const infoPanelStyle = {
@@ -35,6 +35,8 @@ const listStyle = {
 };
 
 const ThreeRender = () => {
+  const [collapsed, setCollapsed] = useState(false);
+
   const currentFeatures = [
     "Realtime ray-marched primitives",
     "Area lights with soft shadows",
@@ -62,36 +64,70 @@ const ThreeRender = () => {
         fontFamily: "'Inter', 'Segoe UI', sans-serif",
       }}
     >
-      <aside style={infoPanelStyle}>
-        <header>
-          <h1 style={headingStyle}>Path Tracer Lab</h1>
-          <p style={{ margin: "0.5rem 0 0", color: "rgba(255,255,255,0.75)" }}>
-            Experiment with GPU ray marching, custom materials, and cinematic
-            lighting directly in the browser.
-          </p>
+      <aside style={{ ...infoPanelStyle }}>
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <h1 style={headingStyle}>Path Tracer Lab</h1>
+            <p
+              style={{
+                margin: "0.5rem 0 0",
+                color: "rgba(255,255,255,0.75)",
+                display: collapsed ? "none" : "block",
+              }}
+            >
+              Experiment with GPU ray marching, custom materials, and cinematic
+              lighting directly in the browser.
+            </p>
+          </div>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              color: "white",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              padding: "0.2rem 0.5rem",
+              cursor: "pointer",
+            }}
+          >
+            {collapsed ? "Expand" : "Hide"}
+          </button>
         </header>
-        <section>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.4rem" }}>
-            Current Features
-          </h2>
-          <ul style={listStyle}>
-            {currentFeatures.map((feature) => (
-              <li key={feature}>{feature}</li>
-            ))}
-          </ul>
-        </section>
-        <section>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.4rem" }}>Roadmap</h2>
-          <ul style={listStyle}>
-            {upcomingFeatures.map((feature) => (
-              <li key={feature}>{feature}</li>
-            ))}
-          </ul>
-        </section>
-        <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.6)" }}>
-          Use the GUI on the right to sculpt scenes, tweak shading models, and
-          capture cinematic frames.
-        </div>
+        {!collapsed && (
+          <>
+            <section>
+              <h2 style={{ fontSize: "1rem", marginBottom: "0.4rem" }}>
+                Current Features
+              </h2>
+              <ul style={listStyle}>
+                {currentFeatures.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+            </section>
+            <section>
+              <h2 style={{ fontSize: "1rem", marginBottom: "0.4rem" }}>
+                Roadmap
+              </h2>
+              <ul style={listStyle}>
+                {upcomingFeatures.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+            </section>
+            <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.6)" }}>
+              Use the GUI on the right to sculpt scenes, tweak shading models,
+              and capture cinematic frames.
+            </div>
+          </>
+        )}
       </aside>
       <ShaderScene />
     </div>

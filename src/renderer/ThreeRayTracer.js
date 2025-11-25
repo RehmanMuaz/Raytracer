@@ -43,6 +43,10 @@ const ThreeRayTracer = () => {
     const lights = createDefaultAreaLights();
     const environment = createEnvironmentSettings();
     const performanceSettings = defaultPerformanceSettings();
+    const backWallIndex = shapes.findIndex(
+      (shape) => shape.name === "Back Wall"
+    );
+    const rainbowColor = new THREE.Color();
 
     let renderer = null;
     let animationId = null;
@@ -222,6 +226,27 @@ const ThreeRayTracer = () => {
         const animate = () => {
           animationId = requestAnimationFrame(animate);
           uniforms.uTime.value = clock.getElapsedTime();
+          const time = uniforms.uTime.value;
+          const oscillation = THREE.MathUtils.lerp(
+            -2.92,
+            2.85,
+            (Math.sin(time) + 1) / 2
+          );
+          cameraControls.position.x = oscillation;
+          uniforms.uCameraPos.value.x = oscillation;
+
+          if (backWallIndex >= 0) {
+            const hue = (time * 0.1) % 1;
+            rainbowColor.setHSL(hue, 0.75, 0.55);
+            const colorEntry = uniforms.uShapeColorMetal.value[backWallIndex];
+            colorEntry.set(
+              rainbowColor.r,
+              rainbowColor.g,
+              rainbowColor.b,
+              colorEntry.w
+            );
+          }
+
           renderer.render(scene, camera);
 
           const now = performance.now();
@@ -264,6 +289,7 @@ const ThreeRayTracer = () => {
         const triggerCameraUpdate = () => {
           uniforms.uCameraPos.value = cameraControls.position;
           uniforms.uCameraTarget.value = cameraControls.target;
+          lastPerformanceAdjustTime = performance.now();
         };
         const triggerEnvironmentUpdate = () => {
           uniforms.uSkyTopColor.value.copy(environment.skyTop);
