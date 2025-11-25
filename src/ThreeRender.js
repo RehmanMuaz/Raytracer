@@ -2,7 +2,7 @@ import React from "react";
 import ShaderScene from "./renderer/ThreeRayTracer";
 
 const infoPanelStyle = {
-  position: "absolute",
+  position: "fixed",
   top: "1.5rem",
   left: "1.5rem",
   width: "320px",
@@ -19,6 +19,7 @@ const infoPanelStyle = {
   border: "1px solid rgba(255,255,255,0.08)",
   overflowY: "auto",
   scrollbarWidth: "thin",
+  zIndex: 100,
 };
 
 const headingStyle = {

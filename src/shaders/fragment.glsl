@@ -6,6 +6,7 @@ varying vec2 vUv;
 #define MAX_AREA_LIGHTS 3
 #define FAR_PLANE 80.0
 #define EPSILON 0.0008
+#define MAX_DENOISE_SAMPLES 3
 
 uniform vec2 uResolution;
 uniform float uTime;
@@ -14,6 +15,9 @@ uniform vec3 uCameraTarget;
 uniform vec3 uSkyTopColor;
 uniform vec3 uSkyBottomColor;
 uniform float uSkyIntensity;
+uniform int uMaxMarchSteps;
+uniform float uAOIntensity;
+uniform float uDenoiseStrength;
 
 uniform int uShapeCount;
 uniform vec4 uShapePosType[MAX_SHAPES];
@@ -117,7 +121,10 @@ Hit traceScene(vec3 ro, vec3 rd) {
     hit.index = -1;
     hit.dist = FAR_PLANE;
 
-    for (int i = 0; i < 160; i++) {
+    for (int i = 0; i < 256; i++) {
+        if (i >= uMaxMarchSteps) {
+            break;
+        }
         vec3 pos = ro + rd * travel;
         int idx;
         float d = mapScene(pos, idx);
@@ -141,7 +148,10 @@ Hit traceSceneSkip(vec3 ro, vec3 rd, int skipIndex) {
     hit.index = -1;
     hit.dist = FAR_PLANE;
 
-    for (int i = 0; i < 160; i++) {
+    for (int i = 0; i < 256; i++) {
+        if (i >= uMaxMarchSteps) {
+            break;
+        }
         vec3 pos = ro + rd * travel;
         int idx;
         float d = mapScene(pos, idx);
@@ -382,7 +392,7 @@ vec3 shade(vec3 ro, vec3 rd, vec2 pixel) {
     Material mat = getMaterial(hit.index);
     vec3 viewDir = normalize(-rd);
 
-    float ao = calcAO(pos, normal) * mat.ao;
+    float ao = calcAO(pos, normal) * mat.ao * uAOIntensity;
     vec2 randA = hash21(pixel + uTime);
 
     int shaderType = int(floor(mat.shaderType + 0.5));
@@ -412,5 +422,21 @@ void main() {
     vec3 rd = normalize(forward * focal + right * uv.x + up * uv.y);
 
     vec3 color = shade(uCameraPos, rd, gl_FragCoord.xy);
+    int extraSamples = int(floor(clamp(uDenoiseStrength, 0.0, 1.0) * float(MAX_DENOISE_SAMPLES)));
+    for (int i = 0; i < MAX_DENOISE_SAMPLES; ++i) {
+        if (i >= extraSamples) {
+            break;
+        }
+        vec2 noise = hash21(gl_FragCoord.xy + vec2(float(i + 1), uTime));
+        vec2 jitter = (noise - 0.5) * 1.2 / uResolution;
+        vec2 jitteredUV = (vUv + jitter) * 2.0 - 1.0;
+        jitteredUV.x *= uResolution.x / uResolution.y;
+        vec3 jitteredDir = normalize(
+          forward * focal + right * jitteredUV.x + up * jitteredUV.y
+        );
+        color += shade(uCameraPos, jitteredDir, gl_FragCoord.xy + vec2(float(i + 1)));
+    }
+    color /= (1.0 + float(extraSamples));
+
     gl_FragColor = vec4(color, 1.0);
 }
